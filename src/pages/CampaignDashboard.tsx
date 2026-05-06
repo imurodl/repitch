@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CartesianGrid,
@@ -16,12 +16,14 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { useApp } from "../state/AppContext";
+import { campaign as campaignApi, inbox as inboxApi } from "../lib/api";
 import {
   binMetrics,
-  generateContentPosts,
-  generateDailyMetrics,
+  type ContentPost,
+  type DailyMetric,
   type Granularity,
 } from "../data/campaignMetrics";
+import type { SubmittedProposal } from "../data/types";
 
 const formatNumber = (n: number) => n.toLocaleString("ko-KR");
 
@@ -37,15 +39,33 @@ const CampaignDashboard = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { submittedProposals } = useApp();
-  const proposal = id ? submittedProposals[id] : undefined;
   const [gran, setGran] = useState<Granularity>("일간");
 
-  const dailyData = useMemo(() => (id ? generateDailyMetrics(id) : []), [id]);
-  const chartData = useMemo(() => binMetrics(dailyData, gran), [dailyData, gran]);
-  const posts = useMemo(
-    () => (proposal && id ? generateContentPosts(id, proposal.input.플랫폼) : []),
-    [id, proposal],
+  const [proposal, setProposal] = useState<SubmittedProposal | undefined>(
+    id ? submittedProposals[id] : undefined,
   );
+  const [dailyData, setDailyData] = useState<DailyMetric[]>([]);
+  const [posts, setPosts] = useState<ContentPost[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    Promise.all([
+      inboxApi.getProposal(id),
+      campaignApi.getCampaignMetrics(id),
+      campaignApi.getCampaignPosts(id),
+    ]).then(([p, metrics, postList]) => {
+      if (cancelled) return;
+      if (p) setProposal(p);
+      setDailyData(metrics);
+      setPosts(postList);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const chartData = useMemo(() => binMetrics(dailyData, gran), [dailyData, gran]);
   const totals = useMemo(() => {
     const last = dailyData[dailyData.length - 1];
     return {

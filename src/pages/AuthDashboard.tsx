@@ -14,12 +14,14 @@ import {
   PHOTO_WEIGHT,
   SNS_WEIGHT,
 } from "../lib/scoring";
-import {
-  sampleReceipt,
-  samplePhoto,
-  sampleSns,
-} from "../data/authEvidenceSamples";
-import type { EvidenceStatus, EvidenceType } from "../data/types";
+import type {
+  EvidenceStatus,
+  EvidenceType,
+  PhotoResult,
+  ReceiptResult,
+  SnsResult,
+} from "../data/types";
+import { auth as authApi } from "../lib/api";
 import { useApp } from "../state/AppContext";
 
 interface EvidenceMeta {
@@ -58,34 +60,34 @@ const EVIDENCE_META: EvidenceMeta[] = [
   },
 ];
 
-const ReceiptResultCard = () => (
+const ReceiptResultCard = ({ data }: { data: ReceiptResult }) => (
   <div className="bg-surface-container-low border border-outline-variant rounded-lg p-4 space-y-2">
     <div className="flex justify-between text-caption">
       <span className="text-on-surface-variant">매장</span>
-      <span className="text-on-surface font-medium">{sampleReceipt.merchant}</span>
+      <span className="text-on-surface font-medium">{data.merchant}</span>
     </div>
     <div className="flex justify-between text-caption">
       <span className="text-on-surface-variant">사업자번호</span>
-      <span className="text-on-surface font-medium">{sampleReceipt.businessNumber}</span>
+      <span className="text-on-surface font-medium">{data.businessNumber}</span>
     </div>
     <div className="flex justify-between text-caption">
       <span className="text-on-surface-variant">구매일</span>
-      <span className="text-on-surface font-medium">{sampleReceipt.purchaseDate}</span>
+      <span className="text-on-surface font-medium">{data.purchaseDate}</span>
     </div>
     <div className="flex justify-between text-caption">
       <span className="text-on-surface-variant">품목</span>
       <span className="text-on-surface font-medium text-right max-w-[60%]">
-        {sampleReceipt.item}
+        {data.item}
       </span>
     </div>
     <div className="flex justify-between text-caption">
       <span className="text-on-surface-variant">결제</span>
-      <span className="text-on-surface font-medium">{sampleReceipt.amount}</span>
+      <span className="text-on-surface font-medium">{data.amount}</span>
     </div>
   </div>
 );
 
-const PhotoResultCard = () => (
+const PhotoResultCard = ({ data }: { data: PhotoResult }) => (
   <div className="bg-surface-container-low border border-outline-variant rounded-lg p-4 space-y-3">
     <div className="relative h-32 rounded-md bg-gradient-to-br from-surface-container-high to-surface-dim flex items-center justify-center overflow-hidden">
       <svg width="80" height="100" viewBox="0 0 80 100" className="text-primary/40">
@@ -94,41 +96,41 @@ const PhotoResultCard = () => (
       </svg>
       <div className="absolute inset-3 border-2 border-secondary rounded-md pointer-events-none" />
       <span className="absolute top-2 left-2 bg-secondary text-on-secondary text-[10px] font-medium px-2 py-0.5 rounded">
-        {samplePhoto.detectedProduct} · {(samplePhoto.confidence * 100).toFixed(0)}%
+        {data.detectedProduct} · {(data.confidence * 100).toFixed(0)}%
       </span>
     </div>
     <div className="grid grid-cols-2 gap-2 text-caption">
       <div className="bg-surface-container-lowest border border-outline-variant rounded p-2">
         <div className="text-on-surface-variant">마모도</div>
         <div className="text-on-surface font-semibold">
-          {(samplePhoto.wearScore * 100).toFixed(0)}%
+          {(data.wearScore * 100).toFixed(0)}%
         </div>
       </div>
       <div className="bg-surface-container-lowest border border-outline-variant rounded p-2">
         <div className="text-on-surface-variant">잔량</div>
-        <div className="text-on-surface font-semibold">{samplePhoto.remainingPct}%</div>
+        <div className="text-on-surface font-semibold">{data.remainingPct}%</div>
       </div>
     </div>
     <div className="text-caption text-on-surface-variant">
-      <span className="text-on-surface font-medium">배경:</span> {samplePhoto.background}
+      <span className="text-on-surface font-medium">배경:</span> {data.background}
     </div>
   </div>
 );
 
-const SnsResultCard = () => (
+const SnsResultCard = ({ data }: { data: SnsResult }) => (
   <div className="bg-surface-container-low border border-outline-variant rounded-lg p-4 space-y-3">
     <div className="flex items-center justify-between">
       <span className="text-caption text-on-surface-variant">감성 점수</span>
-      <span className="font-headline-md text-secondary">{sampleSns.sentimentScore}</span>
+      <span className="font-headline-md text-secondary">{data.sentimentScore}</span>
     </div>
     <div className="h-2 rounded-full bg-surface-container-high overflow-hidden">
       <div
         className="h-full bg-secondary"
-        style={{ width: `${sampleSns.sentimentScore}%` }}
+        style={{ width: `${data.sentimentScore}%` }}
       />
     </div>
     <div className="flex flex-wrap gap-1.5">
-      {sampleSns.keywords.map((k) => (
+      {data.keywords.map((k) => (
         <span
           key={k}
           className="px-2 py-0.5 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-medium"
@@ -140,10 +142,17 @@ const SnsResultCard = () => (
   </div>
 );
 
-const renderResult = (type: EvidenceType) => {
-  if (type === "receipt") return <ReceiptResultCard />;
-  if (type === "photo") return <PhotoResultCard />;
-  return <SnsResultCard />;
+interface EvidenceResults {
+  receipt?: ReceiptResult;
+  photo?: PhotoResult;
+  sns?: SnsResult;
+}
+
+const renderResult = (type: EvidenceType, results: EvidenceResults) => {
+  if (type === "receipt" && results.receipt) return <ReceiptResultCard data={results.receipt} />;
+  if (type === "photo" && results.photo) return <PhotoResultCard data={results.photo} />;
+  if (type === "sns" && results.sns) return <SnsResultCard data={results.sns} />;
+  return null;
 };
 
 const AuthDashboard = () => {
@@ -154,6 +163,7 @@ const AuthDashboard = () => {
     photo: "idle",
     sns: "idle",
   });
+  const [results, setResults] = useState<EvidenceResults>({});
   const [snsUrl, setSnsUrl] = useState("");
 
   const score = useMemo(() => computeAuthScore(status), [status]);
@@ -162,12 +172,28 @@ const AuthDashboard = () => {
     setAuthScore(score);
   }, [score, setAuthScore]);
 
-  const simulate = (type: EvidenceType, durationMs: number) => {
+  // Demo placeholder file. Real backend uses multipart/form-data uploads.
+  const placeholderFile = (name: string) => new File([], name, { type: "image/png" });
+
+  const runScore = async (type: EvidenceType) => {
     if (status[type] === "loading") return;
     setStatus((prev) => ({ ...prev, [type]: "loading" }));
-    setTimeout(() => {
+    try {
+      if (type === "receipt") {
+        const data = await authApi.scoreReceipt(placeholderFile("receipt.png"));
+        setResults((prev) => ({ ...prev, receipt: data }));
+      } else if (type === "photo") {
+        const data = await authApi.scorePhoto(placeholderFile("photo.png"));
+        setResults((prev) => ({ ...prev, photo: data }));
+      } else {
+        const data = await authApi.scoreSns(snsUrl || "https://www.instagram.com/demo/");
+        setResults((prev) => ({ ...prev, sns: data }));
+      }
       setStatus((prev) => ({ ...prev, [type]: "done" }));
-    }, durationMs);
+    } catch (err) {
+      console.error(err);
+      setStatus((prev) => ({ ...prev, [type]: "idle" }));
+    }
   };
 
   const anyDone =
@@ -313,13 +339,13 @@ const AuthDashboard = () => {
                 </div>
               )}
 
-              {s === "done" && <div className="mb-3">{renderResult(meta.type)}</div>}
+              {s === "done" && <div className="mb-3">{renderResult(meta.type, results)}</div>}
 
               <Button
                 variant={s === "done" ? "ghost" : "secondary"}
                 fullWidth
                 disabled={s === "loading"}
-                onClick={() => simulate(meta.type, meta.durationMs)}
+                onClick={() => runScore(meta.type)}
                 icon={
                   s === "loading"
                     ? "progress_activity"

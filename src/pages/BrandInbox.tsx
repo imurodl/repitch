@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MobileHeader } from "../components/MobileHeader";
@@ -8,6 +8,7 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { useApp } from "../state/AppContext";
+import { inbox as inboxApi } from "../lib/api";
 import type { SubmittedProposal } from "../data/types";
 
 type Decision = "accept" | "negotiate" | "reject";
@@ -149,8 +150,21 @@ const BrandInbox = () => {
   const navigate = useNavigate();
   const { getProposal } = useApp();
   const [decision, setDecision] = useState<Decision | null>(null);
+  // Source of truth: API. Cache fallback: AppContext (filled by ProposalGenerator).
+  const [proposal, setProposal] = useState<SubmittedProposal | null>(
+    id ? getProposal(id) : null,
+  );
 
-  const proposal = id ? getProposal(id) : null;
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    inboxApi.getProposal(id).then((p) => {
+      if (!cancelled && p) setProposal(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (!proposal) {
     return (
@@ -263,17 +277,34 @@ const BrandInbox = () => {
 
       <StickyAction>
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="ghost" fullWidth onClick={() => setDecision("reject")}>
+          <Button
+            variant="ghost"
+            fullWidth
+            onClick={() => {
+              setDecision("reject");
+              if (proposal) inboxApi.updateProposalStatus(proposal.id, "rejected").catch(console.error);
+            }}
+          >
             거절
           </Button>
-          <Button variant="secondary" fullWidth onClick={() => setDecision("negotiate")}>
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={() => {
+              setDecision("negotiate");
+              if (proposal) inboxApi.updateProposalStatus(proposal.id, "negotiating").catch(console.error);
+            }}
+          >
             협의
           </Button>
           <Button
             variant="primary"
             fullWidth
             icon="check_circle"
-            onClick={() => setDecision("accept")}
+            onClick={() => {
+              setDecision("accept");
+              if (proposal) inboxApi.updateProposalStatus(proposal.id, "accepted").catch(console.error);
+            }}
           >
             수락
           </Button>

@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon";
 import { brands } from "../data/brands";
 import { influencers } from "../data/influencers";
 import { useApp } from "../state/AppContext";
-import { llmClient, buildBackupProposal } from "../lib/llmClient";
+import { proposal as proposalApi, inbox as inboxApi } from "../lib/api";
 import { exportElementAsPdf } from "../lib/pdfExport";
 import { buildProposalTemplate } from "../data/proposalTemplates";
 import type {
@@ -244,7 +244,7 @@ const ProposalGenerator = () => {
     setStreamedText("");
 
     try {
-      const stream = llmClient.streamProposal({
+      const stream = proposalApi.streamProposal({
         input: buildInput(),
         estimatedReach: targetReach,
         estimatedCtr: targetCtr,
@@ -267,7 +267,7 @@ const ProposalGenerator = () => {
     abortRef.current?.abort();
     setGenerating(false);
     setMode("preview");
-    const text = buildBackupProposal(
+    const text = proposalApi.buildBackupBody(
       buildInput(),
       targetReach,
       targetCtr,
@@ -283,11 +283,10 @@ const ProposalGenerator = () => {
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!streamedText) return;
-    const id = newProposalId();
-    const proposal: SubmittedProposal = {
-      id,
+    const draft: SubmittedProposal = {
+      id: newProposalId(),
       createdAt: new Date().toISOString(),
       influencer: targetInfluencer,
       brand,
@@ -296,8 +295,9 @@ const ProposalGenerator = () => {
       estimatedReach: targetReach,
       estimatedCtr: targetCtr,
     };
-    submitProposal(proposal);
-    navigate(`/influencer/proposal/sent/${id}`);
+    const stored = await inboxApi.submitProposal(draft);
+    submitProposal(stored);
+    navigate(`/influencer/proposal/sent/${stored.id}`);
   };
 
   useEffect(() => {

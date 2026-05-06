@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MobileHeader } from "../components/MobileHeader";
@@ -6,8 +6,7 @@ import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
-import { rankInfluencers } from "../lib/matching";
-import { influencers } from "../data/influencers";
+import { matching as matchingApi } from "../lib/api";
 import { useApp } from "../state/AppContext";
 import type {
   AgeBucket,
@@ -273,10 +272,22 @@ const MatchingDashboard = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const { items: ranked, relaxed } = useMemo(
-    () => rankInfluencers(filters, influencers),
-    [filters],
-  );
+  const [ranked, setRanked] = useState<MatchedInfluencer[]>([]);
+  const [relaxed, setRelaxed] = useState(false);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    matchingApi
+      .searchInfluencers({ filters, signal: ctrl.signal })
+      .then((res) => {
+        setRanked(res.items);
+        setRelaxed(res.relaxed);
+      })
+      .catch((err) => {
+        if ((err as DOMException).name !== "AbortError") console.error(err);
+      });
+    return () => ctrl.abort();
+  }, [filters]);
 
   const proposalEntries = useMemo(
     () =>
